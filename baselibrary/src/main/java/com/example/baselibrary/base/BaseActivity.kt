@@ -2,19 +2,30 @@ package com.example.baselibrary.base
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
+import com.example.baselibrary.http.CoroutineErrorListener
+import com.example.baselibrary.http.uiScope
 import com.example.baselibrary.utils.ColorUtils
 import com.example.baselibrary.utils.StatusUtils
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
 
 /**
  * 基于mvp
  * @author zs
  * @date 2020-04-24修改
  */
-abstract class BaseActivity<P: IBasePresenter<*>> : AppCompatActivity() {
+abstract class BaseActivity<P : IBasePresenter<*>> : AppCompatActivity() {
 
     protected val TAG = javaClass.name
-    protected var presenter:P? = null
+    protected var presenter: P? = null
+
+    protected val scope: CoroutineScope = uiScope(object : CoroutineErrorListener {
+        override fun onError(throwable: Throwable) {
+            Log.d(TAG, "coroutine onError: ${throwable.message}")
+        }
+    })
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,7 +53,7 @@ abstract class BaseActivity<P: IBasePresenter<*>> : AppCompatActivity() {
     /**
      * 沉浸式状态
      */
-    protected open  fun setSystemInvadeBlack() {
+    protected open fun setSystemInvadeBlack() {
         //第二个参数是是否沉浸,第三个参数是状态栏字体是否为黑色。
         StatusUtils.setSystemStatus(this, true, true)
     }
@@ -51,15 +62,15 @@ abstract class BaseActivity<P: IBasePresenter<*>> : AppCompatActivity() {
      * 界面跳转
      * @param
      */
-    protected fun intent(clazz:Class<*>){
-        startActivity(Intent(this,clazz))
+    protected fun intent(clazz: Class<*>) {
+        startActivity(Intent(this, clazz))
     }
 
     /**
      * 携带bundle跳转
      * @param
      */
-    protected fun intent(bundle: Bundle, clazz:Class<*>){
+    protected fun intent(bundle: Bundle, clazz: Class<*>) {
         startActivity(Intent(this, clazz).apply {
             putExtras(bundle)
         })
@@ -69,5 +80,11 @@ abstract class BaseActivity<P: IBasePresenter<*>> : AppCompatActivity() {
     protected abstract fun init(savedInstanceState: Bundle?)
     protected abstract fun createPresenter(): P?
     protected abstract fun getLayoutId(): Int
+
+    override fun onDestroy() {
+        super.onDestroy()
+        scope.cancel()
+        presenter?.onDestroy()
+    }
 
 }

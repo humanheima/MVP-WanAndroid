@@ -8,9 +8,10 @@ import com.franmontiel.persistentcookiejar.cache.SetCookieCache;
 import com.franmontiel.persistentcookiejar.persistence.SharedPrefsCookiePersistor;
 import com.zs.wanandroid.constants.ApiConstants;
 import com.zs.wanandroid.constants.Constants;
+
 import java.io.File;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
+
 import okhttp3.Cache;
 import okhttp3.OkHttpClient;
 import retrofit2.Retrofit;
@@ -19,15 +20,16 @@ import retrofit2.converter.gson.GsonConverterFactory;
 
 /**
  * des Retrofit工厂类
+ *
  * @author zs
  * @date 2020-03-05
  */
 class RetrofitFactory {
 
     private static OkHttpClient.Builder getOkHttpClientBuilder() {
-        HttpLoggingInterceptor loggingInterceptor = new HttpLoggingInterceptor("OkHttp");
-        loggingInterceptor.setPrintLevel(HttpLoggingInterceptor.Level.BODY);
-        loggingInterceptor.setColorLevel(Level.INFO);
+        HttpLoggingInterceptor loggingInterceptor = new HttpLoggingInterceptor();
+        loggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
+        //loggingInterceptor.setColorLevel(Level.INFO);
         File cacheFile = new File(BaseApplication.Companion.getContext().getCacheDir(), "cache");
         //100Mb
         Cache cache = new Cache(cacheFile, 1024 * 1024 * 100);

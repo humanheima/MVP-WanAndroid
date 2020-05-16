@@ -6,4 +6,5 @@ class BaseResponse<T> {
     var errorCode = 0
 
 
+    fun success() = errorCode == 0
 }

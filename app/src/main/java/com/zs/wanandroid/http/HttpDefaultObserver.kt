@@ -31,6 +31,7 @@ abstract class HttpDefaultObserver<T> :Observer<BaseResponse<T>> {
         if (t.errorCode==0) {
 
             if (t.data==null){
+                //构建一个空对象
                 val tClass = (javaClass.genericSuperclass as ParameterizedType).actualTypeArguments[0] as Class<T>
                 t.data = tClass.newInstance()
             }

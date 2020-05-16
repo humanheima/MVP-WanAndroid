@@ -1,26 +1,25 @@
 package com.zs.wanandroid.ui
 
-import com.zs.wanandroid.base.AppBaseActivity
-import com.example.baselibrary.base.IBasePresenter
-import com.zs.wanandroid.ui.main.MainActivity
-import io.reactivex.Observable
-import io.reactivex.disposables.Disposable
-import java.util.concurrent.TimeUnit
 import android.Manifest
 import android.os.Bundle
+import android.util.Log
+import com.example.baselibrary.base.IBasePresenter
 import com.example.baselibrary.utils.PrefUtils
 import com.example.zs_wan_android.R
+import com.zs.wanandroid.base.AppBaseActivity
 import com.zs.wanandroid.constants.Constants
 import com.zs.wanandroid.entity.IntegralEntity
-import com.zs.wanandroid.http.HttpDefaultObserver
-import com.zs.wanandroid.http.RetrofitHelper
-import com.zs.wanandroid.utils.DialogUtils
+import com.zs.wanandroid.http.BaseResponse
+import com.zs.wanandroid.http.RetrofitManager
 import com.zs.wanandroid.proxy.IConfirmClickCallBack
-import io.reactivex.android.schedulers.AndroidSchedulers
-import io.reactivex.schedulers.Schedulers
+import com.zs.wanandroid.ui.main.MainActivity
+import com.zs.wanandroid.utils.DialogUtils
+import io.reactivex.Observable
+import io.reactivex.disposables.Disposable
+import kotlinx.coroutines.launch
 import pub.devrel.easypermissions.AfterPermissionGranted
 import pub.devrel.easypermissions.EasyPermissions
-import pub.devrel.easypermissions.EasyPermissions.PermissionCallbacks
+import java.util.concurrent.TimeUnit
 
 
 /**
@@ -30,11 +29,14 @@ import pub.devrel.easypermissions.EasyPermissions.PermissionCallbacks
  * @author zs
  * @date 2020-03-07
  */
-class SplashActivity : AppBaseActivity<IBasePresenter<*>>(), PermissionCallbacks {
+class SplashActivity : AppBaseActivity<IBasePresenter<*>>() {
 
-    private var disposable:Disposable? = null
+    private var disposable: Disposable? = null
     private val tips = "玩安卓现在要向您申请存储权限，用于存储历史记录以及保存小姐姐图片，您也可以在设置中手动开启或者取消。"
     private val perms = arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+
+    private val apiService = RetrofitManager.get().coroutineApiService()
+
     override fun init(savedInstanceState: Bundle?) {
         saveIntegral()
         requestPermission()
@@ -43,15 +45,15 @@ class SplashActivity : AppBaseActivity<IBasePresenter<*>>(), PermissionCallbacks
     /**
      * 申请权限
      */
-    private fun requestPermission(){
+    private fun requestPermission() {
         //已申请
         if (EasyPermissions.hasPermissions(this, *perms)) {
             startIntent()
-        }else{
+        } else {
             //为申请，显示申请提示语
-            DialogUtils.tips(this,tips,object :IConfirmClickCallBack{
+            DialogUtils.tips(this, tips, object : IConfirmClickCallBack {
                 override fun onClick() {
-                    RequestLocationAndCallPermission()
+                    requestLocationAndCallPermission()
                 }
             })
         }
@@ -60,10 +62,10 @@ class SplashActivity : AppBaseActivity<IBasePresenter<*>>(), PermissionCallbacks
     /**
      * 开始倒计时跳转
      */
-    private fun startIntent(){
-        disposable = Observable.timer(2000,TimeUnit.MILLISECONDS)
+    private fun startIntent() {
+        disposable = Observable.timer(2000, TimeUnit.MILLISECONDS)
             .subscribe {
-                intent(MainActivity::class.java,false)
+                intent(MainActivity::class.java, false)
                 finish()
             }
     }
@@ -82,7 +84,8 @@ class SplashActivity : AppBaseActivity<IBasePresenter<*>>(), PermissionCallbacks
     }
 
     @AfterPermissionGranted(WRITE_EXTERNAL_STORAGE)
-    private fun RequestLocationAndCallPermission() {
+    private fun requestLocationAndCallPermission() {
+        Log.d(TAG, "requestLocationAndCallPermission: ")
         val perms = arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         if (EasyPermissions.hasPermissions(this, *perms)) {
             startIntent()
@@ -91,42 +94,45 @@ class SplashActivity : AppBaseActivity<IBasePresenter<*>>(), PermissionCallbacks
         }
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         EasyPermissions.onRequestPermissionsResult(requestCode, permissions, grantResults, this)
     }
 
     /**
-     * 权限申请失败
-     */
-    override fun onPermissionsDenied(requestCode: Int, perms: MutableList<String>) {
-    }
-
-    /**
-     * 权限申请成功
-     */
-    override fun onPermissionsGranted(requestCode: Int, perms: List<String>) {
-        startIntent()
-    }
-
-    /**
      * 保存积分信息
      */
-    private fun saveIntegral(){
-        RetrofitHelper.getApiService()
+    private fun saveIntegral() {
+        Log.d(TAG, "saveIntegral: ")
+        scope.launch {
+            val response: BaseResponse<IntegralEntity> = apiService.getIntegral()
+            if (response.success()) {
+                Log.d(TAG, "saveIntegral: success")
+                PrefUtils.setObject(Constants.INTEGRAL_INFO, response.data)
+            } else {
+                Log.d(TAG, "saveIntegral: failed${response.errorMsg}")
+            }
+        }
+
+        /*RetrofitHelper.getApiService()
             .getIntegral()
             .subscribeOn(Schedulers.io())
             .observeOn(AndroidSchedulers.mainThread())
             .subscribe(object : HttpDefaultObserver<IntegralEntity>() {
                 override fun onSuccess(t: IntegralEntity) {
-                    PrefUtils.setObject(Constants.INTEGRAL_INFO,t)
+                    PrefUtils.setObject(Constants.INTEGRAL_INFO, t)
                 }
+
                 override fun onError(errorMsg: String) {
                 }
 
                 override fun disposable(d: Disposable) {
                 }
-            })
+            })*/
     }
 
     companion object {

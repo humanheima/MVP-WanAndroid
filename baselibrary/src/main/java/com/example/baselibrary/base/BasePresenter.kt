@@ -1,18 +1,32 @@
 package com.example.baselibrary.base
 
 
+import android.util.Log
+import com.example.baselibrary.http.CoroutineErrorListener
+import com.example.baselibrary.http.uiScope
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.disposables.Disposable
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
 
-open class BasePresenter<V: IBaseView>(view: V) :
+open class BasePresenter<V : IBaseView>(view: V) :
     IBasePresenter<V> {
 
-    protected var view:V? = view
+    protected val TAG = javaClass.name
+
+    protected var view: V? = view
     private var compositeDisposable: CompositeDisposable? = null
+
+    protected val scope: CoroutineScope = uiScope(object : CoroutineErrorListener {
+        override fun onError(throwable: Throwable) {
+            Log.d(TAG, "coroutine onError: ${throwable.message}")
+        }
+    })
 
     init {
         compositeDisposable = CompositeDisposable()
     }
+
     override fun onCreate() {
     }
 
@@ -24,9 +38,10 @@ open class BasePresenter<V: IBaseView>(view: V) :
 
     override fun onDestroy() {
         compositeDisposable?.clear()
+        scope.cancel()
     }
 
-    protected fun addSubscribe(disposable: Disposable){
+    protected fun addSubscribe(disposable: Disposable) {
         compositeDisposable?.add(disposable)
     }
 

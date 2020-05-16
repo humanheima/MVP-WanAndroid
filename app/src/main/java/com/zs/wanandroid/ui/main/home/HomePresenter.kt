@@ -1,40 +1,64 @@
 package com.zs.wanandroid.ui.main.home
 
+import android.util.Log
 import com.example.baselibrary.base.BasePresenter
-import com.zs.wanandroid.entity.BannerEntity
 import com.zs.wanandroid.entity.ArticleEntity
+import com.zs.wanandroid.entity.BannerEntity
+import com.zs.wanandroid.http.BaseResponse
 import com.zs.wanandroid.http.HttpDefaultObserver
 import com.zs.wanandroid.http.RetrofitHelper
+import com.zs.wanandroid.http.RetrofitManager
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.Disposable
 import io.reactivex.schedulers.Schedulers
+import kotlinx.coroutines.launch
 
 /**
  * @author zs
  * @date 2020-03-08
  */
-class HomePresenter(view: HomeContract.View):
-    BasePresenter<HomeContract.View>(view) ,
+class HomePresenter(view: HomeContract.View) :
+    BasePresenter<HomeContract.View>(view),
     HomeContract.Presenter<HomeContract.View> {
 
+    private val apiService = RetrofitManager.get().coroutineApiService()
 
     /**
      * 加载首页文章列表
      */
-    override fun loadData(pageNum:Int) {
-        RetrofitHelper.getApiService()
+    override fun loadData(pageNum: Int) {
+
+        scope.launch {
+            val response: BaseResponse<ArticleEntity> = apiService.getHomeList(pageNum)
+            if (response.success()) {
+                val datas = response.data?.datas
+                datas?.forEach {
+                    Log.d(TAG, "loadData: success ${it.title}")
+                }
+                if (pageNum == 0) {
+                    datas?.let { loadTopList(it) }
+                } else {
+                    datas?.let { view?.showList(it) }
+                }
+
+            } else {
+                Log.d(TAG, "loadData: ${response.errorMsg}")
+                view?.onError(response.errorMsg)
+            }
+        }
+        /*RetrofitHelper.getApiService()
             .getHomeList(pageNum)
             .subscribeOn(Schedulers.io())
             .observeOn(AndroidSchedulers.mainThread())
-            .subscribe(object : HttpDefaultObserver<ArticleEntity>(){
+            .subscribe(object : HttpDefaultObserver<ArticleEntity>() {
                 override fun disposable(d: Disposable) {
                     addSubscribe(d)
                 }
 
                 override fun onSuccess(t: ArticleEntity) {
-                    if (pageNum==0){
+                    if (pageNum == 0) {
                         t.datas?.let { loadTopList(it) }
-                    }else{
+                    } else {
                         t.datas?.let { view?.showList(it) }
                     }
 
@@ -44,17 +68,18 @@ class HomePresenter(view: HomeContract.View):
                     view?.onError(errorMsg)
                 }
 
-            })
+            })*/
     }
+
     /**
      * 包括置顶文章
      */
-    private fun loadTopList(list:MutableList<ArticleEntity.DatasBean>){
+    private fun loadTopList(list: MutableList<ArticleEntity.DatasBean>) {
         RetrofitHelper.getApiService()
             .getTopList()
             .subscribeOn(Schedulers.io())
             .observeOn(AndroidSchedulers.mainThread())
-            .subscribe(object : HttpDefaultObserver<MutableList<ArticleEntity.DatasBean>>(){
+            .subscribe(object : HttpDefaultObserver<MutableList<ArticleEntity.DatasBean>>() {
                 override fun disposable(d: Disposable) {
                     addSubscribe(d)
                 }
@@ -77,7 +102,7 @@ class HomePresenter(view: HomeContract.View):
      * 由于banner和list位于同一界面
      * 所以banner在presenter内部请求
      */
-    override fun loadBanner(){
+    override fun loadBanner() {
         RetrofitHelper.getApiService()
             .getBanner()
             .subscribeOn(Schedulers.io())
@@ -86,6 +111,7 @@ class HomePresenter(view: HomeContract.View):
                 override fun onSuccess(t: MutableList<BannerEntity>) {
                     view?.showBanner(t)
                 }
+
                 override fun onError(errorMsg: String) {
                     view?.onError(errorMsg)
                 }
@@ -104,7 +130,7 @@ class HomePresenter(view: HomeContract.View):
             .unCollect(id)
             .subscribeOn(Schedulers.io())
             .observeOn(AndroidSchedulers.mainThread())
-            .subscribe(object : HttpDefaultObserver<Any>(){
+            .subscribe(object : HttpDefaultObserver<Any>() {
                 override fun disposable(d: Disposable) {
                     addSubscribe(d)
                 }
@@ -129,7 +155,7 @@ class HomePresenter(view: HomeContract.View):
             .collect(id)
             .subscribeOn(Schedulers.io())
             .observeOn(AndroidSchedulers.mainThread())
-            .subscribe(object : HttpDefaultObserver<Any>(){
+            .subscribe(object : HttpDefaultObserver<Any>() {
                 override fun disposable(d: Disposable) {
                     addSubscribe(d)
                 }

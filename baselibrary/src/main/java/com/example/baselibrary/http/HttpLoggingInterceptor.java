@@ -1,208 +1,186 @@
 package com.example.baselibrary.http;
 
+
+import android.util.Log;
+
+import java.io.EOFException;
 import java.io.IOException;
 import java.nio.charset.Charset;
-import java.util.concurrent.TimeUnit;
-import java.util.logging.Logger;
 
-import okhttp3.Connection;
 import okhttp3.Headers;
 import okhttp3.Interceptor;
-import okhttp3.MediaType;
-import okhttp3.Protocol;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
-import okhttp3.internal.http.HttpHeaders;
 import okio.Buffer;
+import okio.BufferedSource;
+
 
 /**
- * ================================================
- * 作    者：jeasonlzy（廖子尧）Github地址：https://github.com/jeasonlzy
- * 版    本：1.0
- * 创建日期：2016/1/12
- * 描    述：OkHttp拦截器，主要用于打印日志
- * 修订历史：
- * ================================================
+ * 参考自官方3.11.0版本的HttpLoggingInterceptor
  */
-public class HttpLoggingInterceptor implements Interceptor {
+public final class HttpLoggingInterceptor implements Interceptor {
 
     private static final Charset UTF8 = Charset.forName("UTF-8");
 
-    private volatile Level printLevel = Level.NONE;
-    private java.util.logging.Level colorLevel;
-    private Logger logger;
+    private static final String TAG = "HttpLoggingInterceptor";
 
     public enum Level {
-        NONE,       //不打印log
-        BASIC,      //只打印 请求首行 和 响应首行
-        HEADERS,    //打印请求和响应的所有 Header
-        BODY        //所有数据全部打印
+        /**
+         * No logs.
+         */
+        NONE,
+        BODY
     }
 
-    public HttpLoggingInterceptor(String tag) {
-        logger = Logger.getLogger(tag);
+    private volatile Level level = Level.NONE;
+
+    /**
+     * Change the level at which this interceptor logs.
+     */
+    public HttpLoggingInterceptor setLevel(Level level) {
+        if (level == null) throw new NullPointerException("level == null. Use Level.NONE instead.");
+        this.level = level;
+        return this;
     }
 
-    public void setPrintLevel(Level level) {
-        if (printLevel == null) throw new NullPointerException("printLevel == null. Use Level.NONE instead.");
-        printLevel = level;
-    }
-
-    public void setColorLevel(java.util.logging.Level level) {
-        colorLevel = level;
-    }
-
-    private void log(String message) {
-        logger.log(colorLevel, message);
+    public Level getLevel() {
+        return level;
     }
 
     @Override
     public Response intercept(Chain chain) throws IOException {
+        Level level = this.level;
+
         Request request = chain.request();
-        if (printLevel == Level.NONE) {
+        //日志级别为NODE，则不进行处理
+        if (level == Level.NONE) {
             return chain.proceed(request);
         }
 
-        //请求日志拦截
-        logForRequest(request, chain.connection());
+        RequestBody requestBody = request.body();
+        boolean hasRequestBody = requestBody != null;
 
-        //执行请求，计算请求时间
-        long startNs = System.nanoTime();
+        /*
+         * 处理打印请求信息
+         */
+        StringBuilder requestInfoBuilder = new StringBuilder("Request: ");
+        requestInfoBuilder.append(request.url());
+        requestInfoBuilder.append("\n");
+
+        if (hasRequestBody && !bodyHasUnknownEncoding(request.headers())) {
+            Buffer buffer = new Buffer();
+            requestBody.writeTo(buffer);
+
+            if (isPlaintext(buffer)) {
+                requestInfoBuilder.append("{");
+                requestInfoBuilder.append(buffer.readString(UTF8));
+                requestInfoBuilder.append("}");
+            } else {
+                requestInfoBuilder.append(" binary request body omitted");
+            }
+        }
+
+        Log.d(TAG, requestInfoBuilder.toString());
+        /*
+         * 处理打印响应信息
+         */
+        StringBuilder responseInfoBuilder = new StringBuilder("Response: ");
+        responseInfoBuilder.append(request.url());
+
         Response response;
         try {
             response = chain.proceed(request);
         } catch (Exception e) {
-            log("<-- HTTP FAILED: " + e);
+            //出现异常就将异常重新抛出，不要把异常吃掉
+            Log.d(TAG, "intercept " + request.url() + "出现异常：" + e.getMessage());
             throw e;
         }
-        long tookMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs);
 
-        //响应日志拦截
-        return logForResponse(response, tookMs);
-    }
+        ResponseBody responseBody = response.body();
+        if (responseBody != null) {
+            long contentLength = responseBody.contentLength();
+            if (!bodyHasUnknownEncoding(response.headers())) {
+                BufferedSource source = responseBody.source();
+                source.request(Long.MAX_VALUE); // Buffer the entire body.
+                Buffer buffer = source.buffer();
 
-    private void logForRequest(Request request, Connection connection) throws IOException {
-        boolean logBody = (printLevel == Level.BODY);
-        boolean logHeaders = (printLevel == Level.BODY || printLevel == Level.HEADERS);
-        RequestBody requestBody = request.body();
-        boolean hasRequestBody = requestBody != null;
-        Protocol protocol = connection != null ? connection.protocol() : Protocol.HTTP_1_1;
-
-        try {
-            String requestStartMessage = "--> " + request.method() + ' ' + request.url() + ' ' + protocol;
-            log(requestStartMessage);
-
-            if (logHeaders) {
-                if (hasRequestBody) {
-                    // Request body headers are only present when installed as a network interceptor. Force
-                    // them to be included (when available) so there values are known.
-                    if (requestBody.contentType() != null) {
-                        log("\nContent-Type: " + requestBody.contentType());
-                    }
-                    if (requestBody.contentLength() != -1) {
-                        log("\nContent-Length: " + requestBody.contentLength());
-                    }
+                if (!isPlaintext(buffer)) {
+                    //如果响应不是字符串的话，直接返回响应
+                    return response;
                 }
-                Headers headers = request.headers();
-                for (int i = 0, count = headers.size(); i < count; i++) {
-                    String name = headers.name(i);
-                    // Skip headers from the request body as they are explicitly logged above.
-                    if (!"Content-Type".equalsIgnoreCase(name) && !"Content-Length".equalsIgnoreCase(name)) {
-                        log("\n" + name + ": " + headers.value(i));
-                    }
-                }
-
-                log(" ");
-                if (logBody && hasRequestBody) {
-                    if (isPlaintext(requestBody.contentType())) {
-                        bodyToString(request);
-                    } else {
-                        log("\nbody: maybe [binary body], omitted!");
-                    }
+                if (contentLength != 0) {
+                    responseInfoBuilder.append("\n");
+                    responseInfoBuilder.append(buffer.clone().readString(UTF8));
                 }
             }
-        } catch (Exception e) {
-            OkLogger.printStackTrace(e);
-        } finally {
-            log("--> END " + request.method());
         }
-    }
 
-    private Response logForResponse(Response response, long tookMs) {
-        Response.Builder builder = response.newBuilder();
-        Response clone = builder.build();
-        ResponseBody responseBody = clone.body();
-        boolean logBody = (printLevel == Level.BODY);
-        boolean logHeaders = (printLevel == Level.BODY || printLevel == Level.HEADERS);
+        sliceLog(TAG, responseInfoBuilder.toString());
 
-        try {
-            log("<-- " + clone.code() + ' ' + clone.message() + ' ' + clone.request().url() + " (" + tookMs + "ms）");
-            if (logHeaders) {
-                Headers headers = clone.headers();
-                for (int i = 0, count = headers.size(); i < count; i++) {
-                    log("\n" + headers.name(i) + ": " + headers.value(i));
-                }
-                log(" ");
-                if (logBody && HttpHeaders.hasBody(clone)) {
-                    if (responseBody == null) return response;
-
-                    if (isPlaintext(responseBody.contentType())) {
-                        byte[] bytes = IOUtils.toByteArray(responseBody.byteStream());
-                        MediaType contentType = responseBody.contentType();
-                        String body = new String(bytes, getCharset(contentType));
-                        log("\nbody:" + JsonUtil.formatJson(body));
-                        responseBody = ResponseBody.create(responseBody.contentType(), bytes);
-                        return response.newBuilder().body(responseBody).build();
-                    } else {
-                        log("\nbody: maybe [binary body], omitted!");
-                    }
-                }
-            }
-        } catch (Exception e) {
-            OkLogger.printStackTrace(e);
-        } finally {
-            log("<-- END HTTP");
-        }
         return response;
-    }
-
-    private static Charset getCharset(MediaType contentType) {
-        Charset charset = contentType != null ? contentType.charset(UTF8) : UTF8;
-        if (charset == null) charset = UTF8;
-        return charset;
     }
 
     /**
      * Returns true if the body in question probably contains human readable text. Uses a small sample
      * of code points to detect unicode control characters commonly used in binary file signatures.
      */
-    private static boolean isPlaintext(MediaType mediaType) {
-        if (mediaType == null) return false;
-        if (mediaType.type() != null && mediaType.type().equals("text")) {
+    private static boolean isPlaintext(Buffer buffer) {
+        try {
+            Buffer prefix = new Buffer();
+            long byteCount = buffer.size() < 64 ? buffer.size() : 64;
+            buffer.copyTo(prefix, 0, byteCount);
+            for (int i = 0; i < 16; i++) {
+                if (prefix.exhausted()) {
+                    break;
+                }
+                int codePoint = prefix.readUtf8CodePoint();
+                if (Character.isISOControl(codePoint) && !Character.isWhitespace(codePoint)) {
+                    return false;
+                }
+            }
             return true;
+        } catch (EOFException e) {
+            return false; // Truncated UTF-8 sequence.
         }
-        String subtype = mediaType.subtype();
-        if (subtype != null) {
-            subtype = subtype.toLowerCase();
-            if (subtype.contains("x-www-form-urlencoded") || subtype.contains("json") || subtype.contains("xml") || subtype.contains("html")) //
-                return true;
-        }
-        return false;
     }
 
-    private void bodyToString(Request request) {
-        try {
-            Request copy = request.newBuilder().build();
-            RequestBody body = copy.body();
-            if (body == null) return;
-            Buffer buffer = new Buffer();
-            body.writeTo(buffer);
-            Charset charset = getCharset(body.contentType());
-            log("\nbody:" + JsonUtil.formatJson(buffer.readString(charset)));
-        } catch (Exception e) {
-            OkLogger.printStackTrace(e);
+    private boolean bodyHasUnknownEncoding(Headers headers) {
+        String contentEncoding = headers.get("Content-Encoding");
+        return contentEncoding != null
+                && !contentEncoding.equalsIgnoreCase("identity")
+                && !contentEncoding.equalsIgnoreCase("gzip");
+    }
+
+    /**
+     * 分片打印日志
+     *
+     * @param tag tag
+     * @param msg 日志信息
+     */
+    private void sliceLog(String tag, String msg) {
+        //因为String的length是字符数量不是字节数量所以为了防止中文字符过多，把4*1024的MAX字节打印长度改为2001字符数
+        //UTF-8中，一个汉字占 1-4字节，根据存储大小选择。常用的中文基本都是3个字节
+        int maxStrLength = 2001 - tag.length();
+        boolean printTag = true;
+        //只打印一次tag
+        if (msg.length() > maxStrLength) {
+            Log.d(tag, msg.substring(0, maxStrLength));
+            printTag = false;
+            msg = msg.substring(maxStrLength);
+        }
+        maxStrLength = 2001;
+
+        while (msg.length() > maxStrLength) {
+            Log.d("", msg.substring(0, maxStrLength));
+            msg = msg.substring(maxStrLength);
+        }
+        //剩余部分
+        if (printTag) {
+            Log.d(tag, msg);
+        } else {
+            Log.d("", msg);
         }
     }
 }
