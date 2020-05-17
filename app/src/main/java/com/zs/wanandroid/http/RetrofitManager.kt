@@ -1,6 +1,11 @@
 package com.zs.wanandroid.http
 
+import com.example.baselibrary.BaseApplication.Companion.getContext
 import com.example.baselibrary.http.HttpLoggingInterceptor
+import com.franmontiel.persistentcookiejar.ClearableCookieJar
+import com.franmontiel.persistentcookiejar.PersistentCookieJar
+import com.franmontiel.persistentcookiejar.cache.SetCookieCache
+import com.franmontiel.persistentcookiejar.persistence.SharedPrefsCookiePersistor
 import com.zs.wanandroid.constants.ApiConstants
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
@@ -37,7 +42,14 @@ class RetrofitManager private constructor() {
         builder.writeTimeout((5 * 1000).toLong(), TimeUnit.MILLISECONDS)
         builder.readTimeout((5 * 1000).toLong(), TimeUnit.MILLISECONDS)
         builder.connectTimeout((5 * 1000).toLong(), TimeUnit.MILLISECONDS)
-        builder.addInterceptor(HttpLoggingInterceptor())
+        val httpLoggingInterceptor = HttpLoggingInterceptor()
+        httpLoggingInterceptor.level = HttpLoggingInterceptor.Level.BODY
+        builder.addInterceptor(httpLoggingInterceptor)
+        val cookieJar: ClearableCookieJar = PersistentCookieJar(
+            SetCookieCache(),
+            SharedPrefsCookiePersistor(getContext())
+        )
+        builder.cookieJar(cookieJar)
 
         okhttpClient = builder.build()
 

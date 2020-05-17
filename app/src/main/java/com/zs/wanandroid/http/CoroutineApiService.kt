@@ -20,23 +20,23 @@ interface CoroutineApiService {
      * 获取首页置顶文章数据
      */
     @GET("/article/top/json")
-    fun getTopList(): Observable<BaseResponse<MutableList<ArticleEntity.DatasBean>>>
+    suspend fun getTopList(): BaseResponse<MutableList<ArticleEntity.DatasBean>>
 
     /**
      * banner
      */
     @GET("/banner/json")
-    fun getBanner(): Observable<BaseResponse<MutableList<BannerEntity>>>
+    suspend fun getBanner(): BaseResponse<MutableList<BannerEntity>>
 
     /**
      * 登录
      */
     @FormUrlEncoded
     @POST("/user/login")
-    fun login(
+    suspend fun login(
         @Field("username") username: String,
         @Field("password") password: String
-    ): Observable<BaseResponse<UserEntity>>
+    ): BaseResponse<UserEntity>
 
     @GET("/user/logout/json")
     fun logout(): Observable<BaseResponse<Any>>
@@ -58,13 +58,13 @@ interface CoroutineApiService {
      * 收藏
      */
     @POST("/lg/collect/{id}/json")
-    fun collect(@Path("id") id: Int): Observable<BaseResponse<Any>>
+    suspend fun collect(@Path("id") id: Int): BaseResponse<Any>
 
     /**
      * 取消收藏
      */
     @POST("/lg/uncollect_originId/{id}/json")
-    fun unCollect(@Path("id") id: Int): Observable<BaseResponse<Any>>
+    suspend fun unCollect(@Path("id") id: Int): BaseResponse<Any>
 
     /**
      * 获取项目tab
@@ -157,9 +157,9 @@ interface CoroutineApiService {
      * 注册
      */
     @POST("/user/register")
-    fun register(
+    suspend fun register(
         @Query("username") username: String,
         @Query("password") password: String,
         @Query("repassword") repassword: String
-    ): Observable<BaseResponse<Any>>
+    ): BaseResponse<Any>
 }

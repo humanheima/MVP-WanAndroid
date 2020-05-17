@@ -5,12 +5,7 @@ import com.example.baselibrary.base.BasePresenter
 import com.zs.wanandroid.entity.ArticleEntity
 import com.zs.wanandroid.entity.BannerEntity
 import com.zs.wanandroid.http.BaseResponse
-import com.zs.wanandroid.http.HttpDefaultObserver
-import com.zs.wanandroid.http.RetrofitHelper
 import com.zs.wanandroid.http.RetrofitManager
-import io.reactivex.android.schedulers.AndroidSchedulers
-import io.reactivex.disposables.Disposable
-import io.reactivex.schedulers.Schedulers
 import kotlinx.coroutines.launch
 
 /**
@@ -27,7 +22,6 @@ class HomePresenter(view: HomeContract.View) :
      * 加载首页文章列表
      */
     override fun loadData(pageNum: Int) {
-
         scope.launch {
             val response: BaseResponse<ArticleEntity> = apiService.getHomeList(pageNum)
             if (response.success()) {
@@ -46,56 +40,25 @@ class HomePresenter(view: HomeContract.View) :
                 view?.onError(response.errorMsg)
             }
         }
-        /*RetrofitHelper.getApiService()
-            .getHomeList(pageNum)
-            .subscribeOn(Schedulers.io())
-            .observeOn(AndroidSchedulers.mainThread())
-            .subscribe(object : HttpDefaultObserver<ArticleEntity>() {
-                override fun disposable(d: Disposable) {
-                    addSubscribe(d)
-                }
-
-                override fun onSuccess(t: ArticleEntity) {
-                    if (pageNum == 0) {
-                        t.datas?.let { loadTopList(it) }
-                    } else {
-                        t.datas?.let { view?.showList(it) }
-                    }
-
-                }
-
-                override fun onError(errorMsg: String) {
-                    view?.onError(errorMsg)
-                }
-
-            })*/
     }
 
     /**
      * 包括置顶文章
      */
     private fun loadTopList(list: MutableList<ArticleEntity.DatasBean>) {
-        RetrofitHelper.getApiService()
-            .getTopList()
-            .subscribeOn(Schedulers.io())
-            .observeOn(AndroidSchedulers.mainThread())
-            .subscribe(object : HttpDefaultObserver<MutableList<ArticleEntity.DatasBean>>() {
-                override fun disposable(d: Disposable) {
-                    addSubscribe(d)
-                }
 
-                //获取置顶文章成功加入到文章列表头部
-                override fun onSuccess(t: MutableList<ArticleEntity.DatasBean>) {
-                    list.addAll(0, t)
-                    view?.showList(list)
+        scope.launch {
+            val response = apiService.getTopList()
+            if (response.success()) {
+                response.data?.let {
+                    list.addAll(0, it)
                 }
-
-                //获取置顶文章失败直接返回文章列表
-                override fun onError(errorMsg: String) {
-                    view?.onError(errorMsg)
-                    view?.showList(list)
-                }
-            })
+                view?.showList(list)
+            } else {
+                Log.d(TAG, "loadTopList: ${response.errorMsg}")
+                view?.onError(response.errorMsg)
+            }
+        }
     }
 
     /**
@@ -103,71 +66,46 @@ class HomePresenter(view: HomeContract.View) :
      * 所以banner在presenter内部请求
      */
     override fun loadBanner() {
-        RetrofitHelper.getApiService()
-            .getBanner()
-            .subscribeOn(Schedulers.io())
-            .observeOn(AndroidSchedulers.mainThread())
-            .subscribe(object : HttpDefaultObserver<MutableList<BannerEntity>>() {
-                override fun onSuccess(t: MutableList<BannerEntity>) {
-                    view?.showBanner(t)
-                }
+        scope.launch {
+            val response: BaseResponse<MutableList<BannerEntity>> = apiService.getBanner()
+            if (response.success()) {
+                val bannerList = response.data ?: return@launch
+                view?.showBanner(bannerList)
 
-                override fun onError(errorMsg: String) {
-                    view?.onError(errorMsg)
-                }
-
-                override fun disposable(d: Disposable) {
-                    addSubscribe(d)
-                }
-            })
+            } else {
+                Log.d(TAG, "loadBanner: ${response.errorMsg}")
+                view?.onError(response.errorMsg)
+            }
+        }
     }
 
     /**
      * 取消收藏
      */
     override fun unCollect(id: Int) {
-        RetrofitHelper.getApiService()
-            .unCollect(id)
-            .subscribeOn(Schedulers.io())
-            .observeOn(AndroidSchedulers.mainThread())
-            .subscribe(object : HttpDefaultObserver<Any>() {
-                override fun disposable(d: Disposable) {
-                    addSubscribe(d)
-                }
+        scope.launch {
+            val response = apiService.unCollect(id)
+            if (response.success()) {
+                view?.unCollectSuccess()
+            } else {
 
-                override fun onSuccess(t: Any) {
-                    view?.unCollectSuccess()
-                }
-
-                override fun onError(errorMsg: String) {
-                    view?.onError(errorMsg)
-                }
-
-            })
-
+                view?.onError(response.errorMsg)
+            }
+        }
     }
 
     /**
      * 收藏
      */
     override fun collect(id: Int) {
-        RetrofitHelper.getApiService()
-            .collect(id)
-            .subscribeOn(Schedulers.io())
-            .observeOn(AndroidSchedulers.mainThread())
-            .subscribe(object : HttpDefaultObserver<Any>() {
-                override fun disposable(d: Disposable) {
-                    addSubscribe(d)
-                }
+        scope.launch {
+            val response = apiService.collect(id)
+            if (response.success()) {
+                view?.collectSuccess()
+            } else {
 
-                override fun onSuccess(t: Any) {
-                    view?.collectSuccess()
-                }
-
-                override fun onError(errorMsg: String) {
-                    view?.onError(errorMsg)
-                }
-
-            })
+                view?.onError(response.errorMsg)
+            }
+        }
     }
 }
